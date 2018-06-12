@@ -6,7 +6,7 @@
  * @license    GPL 2 (http://www.gnu.org/licenses/gpl.html)
  * @author     This version by François Hodierne (http://h6e.net/)
  * @author     Original by Andreas Gohr <andi@splitbrain.org>
- * @version    2.2.0
+ * @version    2.2.1
  */
 
 /**
@@ -44,12 +44,12 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	function getInfo()
 	{
 		return array(
-			'author' => 'h6e.net',
-			'email'  => 'contact@h6e.net',
-			'date'   => '2011-02-15',
+			'author' => 'h6e.net / 7usr7local',
+			'email'  => 'dokuwiki-openid-2018@usr-local.org',
+			'date'   => '2011-02-15 / 2018-06-12',
 			'name'   => 'OpenID plugin',
-			'desc'   => 'Authenticate on a DokuWiki with OpenID',
-			'url'    => 'http://h6e.net/dokuwiki/plugins/openid',
+			'desc'   => 'Authenticate on a DokuWiki with OpenID (Vers. 2.2.1)',
+			'url'    => 'https://github.com/usr-local/dokuwiki-openid',
 		);
 	}
 
@@ -248,7 +248,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		$user = $_SERVER['REMOTE_USER'];
 
 		if (empty($user)) {
-			print $this->plugin_locale_xhtml('intro');
+			print $this->locale_xhtml('intro');
 			print '<div class="centeralign">'.NL;
 			$form = $this->get_openid_form('login');
 			html_form('register', $form);
@@ -462,7 +462,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			$USERINFO['grps'] = array($conf['defaultgroup'], 'openid');
 		}
 
-		$pass = PMA_blowfish_encrypt($USERINFO['pass'], auth_cookiesalt());
+		$pass = auth_encrypt($USERINFO['pass'], auth_cookiesalt());
 		auth_setCookie($user, $pass, false);
 
 		// auth data has changed, reinit the $INFO array
