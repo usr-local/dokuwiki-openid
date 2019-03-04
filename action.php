@@ -220,6 +220,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 					} else {
 						$authenticate = $this->login_user($openid);
 						if ($authenticate) {
+							$log = array('message' => 'logged in temporarily', 'user' => $user);
+							trigger_event('PLUGIN_LOGLOG_LOG', $log);
 							// redirect to the page itself (without do=openid)
 							$this->_redirect(wl($ID));
 						}
@@ -227,6 +229,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 
 				} else {
 					msg($this->getLang('openid_authentication_failed') . ': ' . $response->message, -1);
+					$log = array('message' => 'failed login attempt', 'user' => $user);
+					trigger_event('PLUGIN_LOGLOG_LOG', $log);
 					return;
 				}
 
@@ -469,6 +473,9 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		$this->register_openid_association($user, $openid);
 
 		$this->update_session($user);
+
+		$log = array('message' => 'logged in permanently', 'user' => $user);
+		trigger_event('PLUGIN_LOGLOG_LOG', $log);
 
 		// account created, everything OK
 		$this->_redirect(wl($ID));
