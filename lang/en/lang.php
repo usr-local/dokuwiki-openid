@@ -28,3 +28,7 @@ $lang['openid_complete_text'] = 'Please now verify or complete your account info
 $lang['openid_complete_disabled_text'] = 'You\'re correctly authenticated but registration is not possible on this wiki. <a href="%s">Continue there.</a>';
 
 $lang['none'] = 'None.';
+
+$lang['openid_identifier'] = 'OpenID identifier';
+$lang['openid_registration_denied'] = 'OpenID registration denied';
+$lang['openid_update_profile_denied'] = 'OpenID update profile denied';

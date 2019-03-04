@@ -44,9 +44,9 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	function getInfo()
 	{
 		return array(
-			'author' => 'h6e.net / 7usr7local',
+			'author' => 'h6e.net / 7usr7local / tzzee',
 			'email'  => 'dokuwiki-openid-2018@usr-local.org',
-			'date'   => '2011-02-15 / 2018-06-12',
+			'date'   => '2011-02-15 / 2018-06-12 / 2019-02-27',
 			'name'   => 'OpenID plugin',
 			'desc'   => 'Authenticate on a DokuWiki with OpenID (Vers. 2.2.1)',
 			'url'    => 'https://github.com/usr-local/dokuwiki-openid',
@@ -126,6 +126,16 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	function handle_act_preprocess(&$event, $param)
 	{
 		global $ID, $conf, $auth;
+
+		$disabled = explode(',', $conf['disableactions']);
+		if ($this->getConf('openid_disable_registration')) {
+			$disabled[] = 'register';
+		}
+		if ($this->getConf('openid_disable_update_profile')) {
+			$disabled[] = 'resendpwd';
+			$disabled[] = 'profile';
+		}
+		$conf['disableactions'] = implode(',', $disabled);
 
 		$user = $_SERVER['REMOTE_USER'];
         
@@ -228,6 +238,19 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 
 		}
         
+		if ($this->getConf('openid_disable_registration') && $event->data == 'register') {
+			$event->stopPropagation();
+			$event->preventDefault();
+			msg($this->getLang('openid_registration_denied'), -1);
+			return;
+		}
+		if ($this->getConf('openid_disable_update_profile') && ($event->data == 'profile'||$event->data == 'resendpwd')) {
+			$event->stopPropagation();
+			$event->preventDefault();
+			msg($this->getLang('openid_update_profile_denied'), -1);
+			return;
+		}
+
 		return; // fall through to what ever action was called
 	}
 
@@ -264,7 +287,7 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			} else {
 				echo '<p>', sprintf($this->getLang('openid_complete_disabled_text'), wl($ID)), '</p>', NL;
 			}
-		} else {
+		} else if (!$this->getConf('openid_disable_update_profile')) {
 			echo '<h1>', $this->getLang('openid_identities_title'), '</h1>', NL;
 			$identities = $this->get_associations($_SERVER['REMOTE_USER']);
 			if (!empty($identities)) {
@@ -297,6 +320,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 			$form->addElement(form_makeButton('submit', '', $this->getLang('add_button')));
 			html_form('add', $form);
 			print '</div>'.NL;
+		} else {
+			msg($this->getLang('openid_update_profile_denied'), -1);
 		}
 	}
 
@@ -316,14 +341,24 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 		if ($mode == 'extra') {
 			$form->startFieldset($this->getLang('openid_account_fieldset'));
 			$form->addHidden('mode', 'extra');
-			$form->addElement(form_makeTextField('nickname', $_REQUEST['nickname'], $lang['user'], null, $c, $p));
-			$form->addElement(form_makeTextField('email', $_REQUEST['email'], $lang['email'], '', $c, $p));
-			$form->addElement(form_makeTextField('fullname', $_REQUEST['fullname'], $lang['fullname'], '', $c, $p));
+			if($this->getConf('openid_disable_update_profile')){
+				$form->addHidden('nickname', $_REQUEST['nickname']);
+				$form->addHidden('email', $_REQUEST['email']);
+				$form->addHidden('fullname', $_REQUEST['fullname']);
+			}else{
+				$form->addElement(form_makeTextField('nickname', $_REQUEST['nickname'], $lang['user'], null, $c, $p));
+				$form->addElement(form_makeTextField('email', $_REQUEST['email'], $lang['email'], '', $c, $p));
+				$form->addElement(form_makeTextField('fullname', $_REQUEST['fullname'], $lang['fullname'], '', $c, $p));
+			}
 			$form->addElement(form_makeButton('submit', '', $this->getLang('complete_button')));
 		} else {
 			$form->startFieldset($this->getLang('openid_login_fieldset'));
 			$form->addHidden('mode', 'login');
-			$form->addElement(form_makeTextField('openid_identifier', $_REQUEST['openid_identifier'], $this->getLang('openid_url_label'), 'openid__url', $c, $p));
+			if (!empty($this->getConf('openid_identifier'))){
+				$form->addHidden('openid_identifier', $this->getConf('openid_identifier'));
+			}else{
+				$form->addElement(form_makeTextField('openid_identifier', $_REQUEST['openid_identifier'], $this->getLang('openid_url_label'), 'openid__url', $c, $p));
+			}
 			$form->addElement(form_makeButton('submit', '', $lang['btn_login']));
 		}
 		$form->endFieldset();
