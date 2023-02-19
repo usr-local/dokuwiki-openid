@@ -25,25 +25,24 @@ class Auth_Yadis_ParseHTML {
     /**
      * @access private
      */
-    var $_re_flags = "si";
+    public $_re_flags = "si";
 
     /**
      * @access private
      */
-    var $_removed_re =
-           "<!--.*?-->|<!\[CDATA\[.*?\]\]>|<script\b(?!:)[^>]*>.*?<\/script>";
+    public $_removed_re = '<!--.*?-->|<!\[CDATA\[.*?\]\]>|<script\b(?!:)[^>]*>.*?<\/script>';
 
     /**
      * @access private
      */
-    var $_tag_expr = "<%s%s(?:\s.*?)?%s>";
+    public $_tag_expr = '<%s%s(?:\s.*?)?%s>';
 
     /**
      * @access private
      */
-    var $_attr_find = '\b([-\w]+)=(".*?"|\'.*?\'|.+?)[\/\s>]';
+    public $_attr_find = '\b([-\w]+)=(".*?"|\'.*?\'|.+?)[\/\s>]';
 
-    function Auth_Yadis_ParseHTML()
+    function __construct()
     {
         $this->_attr_find = sprintf("/%s/%s",
                                     $this->_attr_find,
@@ -53,39 +52,16 @@ class Auth_Yadis_ParseHTML {
                                      $this->_removed_re,
                                      $this->_re_flags);
 
-        $this->_entity_replacements = array(
-                                            'amp' => '&',
-                                            'lt' => '<',
-                                            'gt' => '>',
-                                            'quot' => '"'
-                                            );
+        $this->_entity_replacements = [
+            'amp' => '&',
+            'lt' => '<',
+            'gt' => '>',
+            'quot' => '"',
+        ];
 
         $this->_ent_replace =
             sprintf("&(%s);", implode("|",
                                       $this->_entity_replacements));
-    }
-
-    /**
-     * Replace HTML entities (amp, lt, gt, and quot) as well as
-     * numeric entities (e.g. #x9f;) with their actual values and
-     * return the new string.
-     *
-     * @access private
-     * @param string $str The string in which to look for entities
-     * @return string $new_str The new string entities decoded
-     */
-    function replaceEntities($str)
-    {
-        foreach ($this->_entity_replacements as $old => $new) {
-            $str = preg_replace(sprintf("/&%s;/", $old), $new, $str);
-        }
-
-        // Replace numeric entities because html_entity_decode doesn't
-        // do it for us.
-        $str = preg_replace('~&#x([0-9a-f]+);~ei', 'chr(hexdec("\\1"))', $str);
-        $str = preg_replace('~&#([0-9]+);~e', 'chr(\\1)', $str);
-
-        return $str;
     }
 
     /**
@@ -99,9 +75,9 @@ class Auth_Yadis_ParseHTML {
      */
     function removeQuotes($str)
     {
-        $matches = array();
+        $matches = [];
         $double = '/^"(.*)"$/';
-        $single = "/^\'(.*)\'$/";
+        $single = "/^'(.*)'$/";
 
         if (preg_match($double, $str, $matches)) {
             return $matches[1];
@@ -113,7 +89,7 @@ class Auth_Yadis_ParseHTML {
     }
 
     /**
-     * Create a regular expression that will match an opening 
+     * Create a regular expression that will match an opening
      * or closing tag from a set of names.
      *
      * @access private
@@ -160,16 +136,19 @@ class Auth_Yadis_ParseHTML {
                                     "",
                                     $html_string);
 
-        $key_tags = array($this->tagPattern('html', false, false),
+        $key_tags = [
+            $this->tagPattern('html', false, false),
                           $this->tagPattern('head', false, false),
                           $this->tagPattern('head', true, false),
                           $this->tagPattern('html', true, false),
-                          $this->tagPattern(array(
+                          $this->tagPattern([
                           'body', 'frameset', 'frame', 'p', 'div',
-                          'table','span','a'), 'maybe', 'maybe'));
-        $key_tags_pos = array();
+                          'table','span','a'
+                          ], 'maybe', 'maybe')
+        ];
+        $key_tags_pos = [];
         foreach ($key_tags as $pat) {
-            $matches = array();
+            $matches = [];
             preg_match($pat, $html_string, $matches, PREG_OFFSET_CAPTURE);
             if($matches) {
                 $key_tags_pos[] = $matches[0][1];
@@ -179,44 +158,44 @@ class Auth_Yadis_ParseHTML {
         }
         // no opening head tag
         if (is_null($key_tags_pos[1])) {
-            return array();
+            return [];
         }
         // the effective </head> is the min of the following
         if (is_null($key_tags_pos[2])) {
             $key_tags_pos[2] = strlen($html_string);
         }
-        foreach (array($key_tags_pos[3], $key_tags_pos[4]) as $pos) {
+        foreach ([$key_tags_pos[3], $key_tags_pos[4]] as $pos) {
             if (!is_null($pos) && $pos < $key_tags_pos[2]) {
                 $key_tags_pos[2] = $pos;
             }
         }
         // closing head tag comes before opening head tag
         if ($key_tags_pos[1] > $key_tags_pos[2]) {
-            return array();
+            return [];
         }
         // if there is an opening html tag, make sure the opening head tag
         // comes after it
         if (!is_null($key_tags_pos[0]) && $key_tags_pos[1] < $key_tags_pos[0]) {
-            return array();
+            return [];
         }
         $html_string = substr($html_string, $key_tags_pos[1],
                               ($key_tags_pos[2]-$key_tags_pos[1]));
 
-        $link_data = array();
-        $link_matches = array();
-        
+        $link_data = [];
+        $link_matches = [];
+
         if (!preg_match_all($this->tagPattern('meta', false, 'maybe'),
                             $html_string, $link_matches)) {
-            return array();
+            return [];
         }
 
         foreach ($link_matches[0] as $link) {
-            $attr_matches = array();
+            $attr_matches = [];
             preg_match_all($this->_attr_find, $link, $attr_matches);
-            $link_attrs = array();
+            $link_attrs = [];
             foreach ($attr_matches[0] as $index => $full_match) {
                 $name = $attr_matches[1][$index];
-                $value = $this->replaceEntities(
+                $value = html_entity_decode(
                               $this->removeQuotes($attr_matches[2][$index]));
 
                 $link_attrs[strtolower($name)] = $value;
@@ -245,7 +224,7 @@ class Auth_Yadis_ParseHTML {
             foreach ($meta_tags as $tag) {
                 if (array_key_exists('http-equiv', $tag) &&
                     (in_array(strtolower($tag['http-equiv']),
-                              array('x-xrds-location', 'x-yadis-location'))) &&
+                              ['x-xrds-location', 'x-yadis-location'])) &&
                     array_key_exists('content', $tag)) {
                     return $tag['content'];
                 }

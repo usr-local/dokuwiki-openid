@@ -34,6 +34,11 @@ class Auth_Yadis_PlainHTTPFetcher extends Auth_Yadis_HTTPFetcher {
         return function_exists('openssl_open');
     }
 
+    /**
+     * @param string $url
+     * @param array|null $extra_headers
+     * @return Auth_Yadis_HTTPResponse|null|bool
+     */
     function get($url, $extra_headers = null)
     {
         if (!$this->canFetchURL($url)) {
@@ -44,6 +49,9 @@ class Auth_Yadis_PlainHTTPFetcher extends Auth_Yadis_HTTPFetcher {
 
         $stop = time() + $this->timeout;
         $off = $this->timeout;
+        $headers = [];
+        $code = '';
+        $body = '';
 
         while ($redir && ($off > 0)) {
 
@@ -75,15 +83,16 @@ class Auth_Yadis_PlainHTTPFetcher extends Auth_Yadis_HTTPFetcher {
 
             $user_agent = Auth_OpenID_USER_AGENT;
 
-            $headers = array(
-                             "GET ".$parts['path'].
-                             (array_key_exists('query', $parts) ?
-                              "?".$parts['query'] : "").
-                                 " HTTP/1.0",
-                             "User-Agent: $user_agent",
-                             "Host: ".$parts['host'].
-                                ($specify_port ? ":".$parts['port'] : ""),
-                             "Port: ".$parts['port']);
+            $headers = [
+                "GET " . $parts['path'] .
+                (array_key_exists('query', $parts) ?
+                    "?" . $parts['query'] : "") .
+                " HTTP/1.0",
+                "User-Agent: $user_agent",
+                "Host: " . $parts['host'] .
+                ($specify_port ? ":" . $parts['port'] : ""),
+                "Port: " . $parts['port'],
+            ];
 
             $errno = 0;
             $errstr = '';
@@ -121,7 +130,7 @@ class Auth_Yadis_PlainHTTPFetcher extends Auth_Yadis_HTTPFetcher {
             $http_code = explode(" ", $headers[0]);
             $code = $http_code[1];
 
-            if (in_array($code, array('301', '302'))) {
+            if (in_array($code, ['301', '302'])) {
                 $url = $this->_findRedirect($headers, $url);
                 $redir = true;
             } else {
@@ -131,7 +140,7 @@ class Auth_Yadis_PlainHTTPFetcher extends Auth_Yadis_HTTPFetcher {
             $off = $stop - time();
         }
 
-        $new_headers = array();
+        $new_headers = [];
 
         foreach ($headers as $header) {
             if (preg_match("/:/", $header)) {
@@ -156,7 +165,7 @@ class Auth_Yadis_PlainHTTPFetcher extends Auth_Yadis_HTTPFetcher {
 
         $parts = parse_url($url);
 
-        $headers = array();
+        $headers = [];
 
         $post_path = $parts['path'];
         if (isset($parts['query'])) {
@@ -231,7 +240,7 @@ class Auth_Yadis_PlainHTTPFetcher extends Auth_Yadis_HTTPFetcher {
         $http_code = explode(" ", $headers[0]);
         $code = $http_code[1];
 
-        $new_headers = array();
+        $new_headers = [];
 
         foreach ($headers as $header) {
             if (preg_match("/:/", $header)) {

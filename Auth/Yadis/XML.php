@@ -61,6 +61,7 @@ class Auth_Yadis_XMLParser {
     function registerNamespace($prefix, $uri)
     {
         // Not implemented.
+        return false;
     }
 
     /**
@@ -76,6 +77,7 @@ class Auth_Yadis_XMLParser {
     function setXML($xml_string)
     {
         // Not implemented.
+        return false;
     }
 
     /**
@@ -94,6 +96,7 @@ class Auth_Yadis_XMLParser {
     function &evalXPath($xpath, $node = null)
     {
         // Not implemented.
+        return [];
     }
 
     /**
@@ -107,6 +110,7 @@ class Auth_Yadis_XMLParser {
     function content($node)
     {
         // Not implemented.
+        return '';
     }
 
     /**
@@ -115,12 +119,13 @@ class Auth_Yadis_XMLParser {
      * @param mixed $node A node object from a previous call to
      * $this->evalXPath().
      *
-     * @return array $attrs An array mapping attribute names to
+     * @return array An array mapping attribute names to
      * values.
      */
     function attributes($node)
     {
         // Not implemented.
+        return [];
     }
 }
 
@@ -134,12 +139,12 @@ class Auth_Yadis_XMLParser {
  * @package OpenID
  */
 class Auth_Yadis_domxml extends Auth_Yadis_XMLParser {
-    function Auth_Yadis_domxml()
+    function __construct()
     {
         $this->xml = null;
         $this->doc = null;
         $this->xpath = null;
-        $this->errors = array();
+        $this->errors = [];
     }
 
     function setXML($xml_string)
@@ -171,12 +176,12 @@ class Auth_Yadis_domxml extends Auth_Yadis_XMLParser {
         }
 
         if (!$result) {
-            $n = array();
+            $n = [];
             return $n;
         }
 
         if (!$result->nodeset) {
-            $n = array();
+            $n = [];
             return $n;
         }
 
@@ -194,7 +199,7 @@ class Auth_Yadis_domxml extends Auth_Yadis_XMLParser {
     {
         if ($node) {
             $arr = $node->attributes();
-            $result = array();
+            $result = [];
 
             if ($arr) {
                 foreach ($arr as $attrnode) {
@@ -217,13 +222,16 @@ class Auth_Yadis_domxml extends Auth_Yadis_XMLParser {
  * @package OpenID
  */
 class Auth_Yadis_dom extends Auth_Yadis_XMLParser {
-    function Auth_Yadis_dom()
-    {
-        $this->xml = null;
-        $this->doc = null;
-        $this->xpath = null;
-        $this->errors = array();
-    }
+
+    /** @var string */
+    protected $xml = '';
+
+    protected $doc = null;
+
+    /** @var DOMXPath */
+    protected $xpath = null;
+
+    protected $errors = [];
 
     function setXML($xml_string)
     {
@@ -234,7 +242,23 @@ class Auth_Yadis_dom extends Auth_Yadis_XMLParser {
             return false;
         }
 
-        if (!@$this->doc->loadXML($xml_string)) {
+        // libxml_disable_entity_loader (PHP 5 >= 5.2.11)
+        if (function_exists('libxml_disable_entity_loader') && function_exists('libxml_use_internal_errors')) {
+            // disable external entities and libxml errors
+            $loader = libxml_disable_entity_loader(true);
+            $errors = libxml_use_internal_errors(true);
+            $parse_result = @$this->doc->loadXML($xml_string);
+            libxml_disable_entity_loader($loader);
+            libxml_use_internal_errors($errors);
+        } else {
+            $parse_result = @$this->doc->loadXML($xml_string);
+        }
+
+        if (!$parse_result) {
+            return false;
+        }
+
+        if (isset($this->doc->doctype)) {
             return false;
         }
 
@@ -260,7 +284,7 @@ class Auth_Yadis_dom extends Auth_Yadis_XMLParser {
             $result = @$this->xpath->query($xpath);
         }
 
-        $n = array();
+        $n = [];
 
         if (!$result) {
             return $n;
@@ -278,13 +302,19 @@ class Auth_Yadis_dom extends Auth_Yadis_XMLParser {
         if ($node) {
             return $node->textContent;
         }
+        return '';
     }
 
+    /**
+     * @param DOMNode $node
+     * @return array
+     */
     function attributes($node)
     {
         if ($node) {
+            /** @var DOMNamedNodeMap $arr */
             $arr = $node->attributes;
-            $result = array();
+            $result = [];
 
             if ($arr) {
                 for ($i = 0; $i < $arr->length; $i++) {
@@ -295,6 +325,7 @@ class Auth_Yadis_dom extends Auth_Yadis_XMLParser {
 
             return $result;
         }
+        return [];
     }
 }
 
@@ -318,8 +349,10 @@ function Auth_Yadis_setDefaultParser($parser)
 
 function Auth_Yadis_getSupportedExtensions()
 {
-    return array('dom'    => 'Auth_Yadis_dom',
-                 'domxml' => 'Auth_Yadis_domxml');
+    return [
+        'dom' => 'Auth_Yadis_dom',
+        'domxml' => 'Auth_Yadis_domxml',
+    ];
 }
 
 /**
@@ -327,15 +360,17 @@ function Auth_Yadis_getSupportedExtensions()
  * the availability of PHP extensions for XML parsing.  If
  * Auth_Yadis_setDefaultParser has been called, the parser used in
  * that call will be returned instead.
+ *
+ * @return Auth_Yadis_XMLParser|bool
  */
 function Auth_Yadis_getXMLParser()
 {
     global $__Auth_Yadis_defaultParser;
-    
+
     if (isset($__Auth_Yadis_defaultParser)) {
         return $__Auth_Yadis_defaultParser;
     }
-    
+
     foreach(Auth_Yadis_getSupportedExtensions() as $extension => $classname)
     {
       if (extension_loaded($extension))
@@ -345,7 +380,7 @@ function Auth_Yadis_getXMLParser()
         return $p;
       }
     }
-    
+
     return false;
 }
 

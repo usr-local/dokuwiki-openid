@@ -38,6 +38,13 @@ require_once 'Auth/OpenID/Nonce.php';
  */
 class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
 
+    protected $directory = '';
+    protected $active = false;
+    protected $nonce_dir = '';
+    protected $association_dir = '';
+    protected $temp_dir = '';
+    protected $max_nonce_age = 0;
+
     /**
      * Initializes a new {@link Auth_OpenID_FileStore}.  This
      * initializes the nonce and association directories, which are
@@ -46,7 +53,7 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
      * @param string $directory This is the directory to put the store
      * directories in.
      */
-    function Auth_OpenID_FileStore($directory)
+    function __construct($directory)
     {
         if (!Auth_OpenID::ensureDir($directory)) {
             trigger_error('Not a directory and failed to create: '
@@ -110,10 +117,11 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
         $name = Auth_OpenID_FileStore::_mkstemp($dir = $this->temp_dir);
         $file_obj = @fopen($name, 'wb');
         if ($file_obj !== false) {
-            return array($file_obj, $name);
+            return [$file_obj, $name];
         } else {
             Auth_OpenID_FileStore::_removeIfPresent($name);
         }
+        return [];
     }
 
     function cleanupNonces()
@@ -145,6 +153,8 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
      * contain the domain name from the server URL for ease of human
      * inspection of the data directory.
      *
+     * @param string $server_url
+     * @param string $handle
      * @return string $filename
      */
     function getAssociationFilename($server_url, $handle)
@@ -178,6 +188,10 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
 
     /**
      * Store an association in the association directory.
+     *
+     * @param string $server_url
+     * @param Auth_OpenID_Association $association
+     * @return bool
      */
     function storeAssociation($server_url, $association)
     {
@@ -227,7 +241,9 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
      * Retrieve an association. If no handle is specified, return the
      * association with the most recent issue time.
      *
-     * @return mixed $association
+     * @param string $server_url
+     * @param string|null $handle
+     * @return Auth_OpenID_Association|mixed|null
      */
     function getAssociation($server_url, $handle = null)
     {
@@ -249,7 +265,7 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
         } else {
             $association_files =
                 Auth_OpenID_FileStore::_listdir($this->association_dir);
-            $matching_files = array();
+            $matching_files = [];
 
             // strip off the path to do the comparison
             $name = basename($filename);
@@ -260,18 +276,20 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
                 }
             }
 
-            $matching_associations = array();
+            $matching_associations = [];
             // read the matching files and sort by time issued
             foreach ($matching_files as $full_name) {
                 $association = $this->_getAssociation($full_name);
                 if ($association !== null) {
-                    $matching_associations[] = array($association->issued,
-                                                     $association);
+                    $matching_associations[] = [
+                        $association->issued,
+                        $association
+                    ];
                 }
             }
 
-            $issued = array();
-            $assocs = array();
+            $issued = [];
+            $assocs = [];
             foreach ($matching_associations as $key => $assoc) {
                 $issued[$key] = $assoc[0];
                 $assocs[$key] = $assoc[1];
@@ -282,7 +300,7 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
 
             // return the most recently issued one.
             if ($matching_associations) {
-                list($issued, $assoc) = $matching_associations[0];
+                list(, $assoc) = $matching_associations[0];
                 return $assoc;
             } else {
                 return null;
@@ -292,11 +310,17 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
 
     /**
      * @access private
+     * @param string $filename
+     * @return Auth_OpenID_Association|null
      */
     function _getAssociation($filename)
     {
         if (!$this->active) {
             trigger_error("FileStore no longer active", E_USER_ERROR);
+            return null;
+        }
+
+        if (file_exists($filename) !== true) {
             return null;
         }
 
@@ -306,7 +330,12 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
             return null;
         }
 
-        $assoc_s = fread($assoc_file, filesize($filename));
+        $filesize = filesize($filename);
+        if ($filesize === false || $filesize <= 0) {
+            return null;
+        }
+
+        $assoc_s = fread($assoc_file, $filesize);
         fclose($assoc_file);
 
         if (!$assoc_s) {
@@ -333,6 +362,8 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
     /**
      * Remove an association if it exists. Do nothing if it does not.
      *
+     * @param string $server_url
+     * @param string $handle
      * @return bool $success
      */
     function removeAssociation($server_url, $handle)
@@ -355,6 +386,9 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
      * Return whether this nonce is present. As a side effect, mark it
      * as no longer present.
      *
+     * @param string $server_url
+     * @param int $timestamp
+     * @param string $salt
      * @return bool $present
      */
     function useNonce($server_url, $timestamp, $salt)
@@ -404,7 +438,7 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
      */
     function _allAssocs()
     {
-        $all_associations = array();
+        $all_associations = [];
 
         $association_filenames =
             Auth_OpenID_FileStore::_listdir($this->association_dir);
@@ -427,8 +461,10 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
                                                  $association_filename);
                 } else {
                     if ($association->getExpiresIn() == 0) {
-                        $all_associations[] = array($association_filename,
-                                                    $association);
+                        $all_associations[] = [
+                            $association_filename,
+                            $association,
+                        ];
                     }
                 }
             }
@@ -457,6 +493,7 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
 
         foreach ($this->_allAssocs() as $pair) {
             list($assoc_filename, $assoc) = $pair;
+            /** @var Auth_OpenID_Association $assoc */
             if ($assoc->getExpiresIn() == 0) {
                 Auth_OpenID_FileStore::_removeIfPresent($assoc_filename);
             }
@@ -465,6 +502,8 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
 
     /**
      * @access private
+     * @param string $dir
+     * @return bool
      */
     function _rmtree($dir)
     {
@@ -473,8 +512,8 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
         }
 
         if ($handle = opendir($dir)) {
-            while ($item = readdir($handle)) {
-                if (!in_array($item, array('.', '..'))) {
+            while (false !== ($item = readdir($handle))) {
+                if (!in_array($item, ['.', '..'])) {
                     if (is_dir($dir . $item)) {
 
                         if (!Auth_OpenID_FileStore::_rmtree($dir . $item)) {
@@ -503,6 +542,8 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
 
     /**
      * @access private
+     * @param string $dir
+     * @return bool|string
      */
     function _mkstemp($dir)
     {
@@ -518,6 +559,8 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
 
     /**
      * @access private
+     * @param string $dir
+     * @return bool|string
      */
     static function _mkdtemp($dir)
     {
@@ -535,13 +578,15 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
 
     /**
      * @access private
+     * @param string $dir
+     * @return array
      */
     function _listdir($dir)
     {
         $handle = opendir($dir);
-        $files = array();
+        $files = [];
         while (false !== ($filename = readdir($handle))) {
-            if (!in_array($filename, array('.', '..'))) {
+            if (!in_array($filename, ['.', '..'])) {
                 $files[] = $dir . DIRECTORY_SEPARATOR . $filename;
             }
         }
@@ -550,6 +595,8 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
 
     /**
      * @access private
+     * @param string $char
+     * @return bool
      */
     function _isFilenameSafe($char)
     {
@@ -560,6 +607,8 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
 
     /**
      * @access private
+     * @param string $str
+     * @return mixed|string
      */
     function _safe64($str)
     {
@@ -572,6 +621,8 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
 
     /**
      * @access private
+     * @param string $str
+     * @return string
      */
     function _filenameEscape($str)
     {
@@ -594,6 +645,7 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
      * the time of the call.
      *
      * @access private
+     * @param string $filename
      * @return bool $result True if the file was present, false if not.
      */
     function _removeIfPresent($filename)
@@ -606,6 +658,7 @@ class Auth_OpenID_FileStore extends Auth_OpenID_OpenIDStore {
         $removed = 0;
         foreach ($this->_allAssocs() as $pair) {
             list($assoc_filename, $assoc) = $pair;
+            /** @var Auth_OpenID_Association $assoc */
             if ($assoc->getExpiresIn() == 0) {
                 $this->_removeIfPresent($assoc_filename);
                 $removed += 1;
