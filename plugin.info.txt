@@ -1,0 +1,7 @@
+# General Plugin Info
+base   openid
+author Peter, Andreas Gohr, François Hodierne
+date   2023-02-19
+name   OpenID plugin
+desc   Allow users to authenticate with OpenID.
+url    https://www.dokuwiki.org/plugin:openid
