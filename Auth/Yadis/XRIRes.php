@@ -8,7 +8,11 @@ require_once 'Auth/Yadis/XRDS.php';
 require_once 'Auth/Yadis/XRI.php';
 
 class Auth_Yadis_ProxyResolver {
-    function Auth_Yadis_ProxyResolver($fetcher, $proxy_url = null)
+
+    /** @var Auth_Yadis_HTTPFetcher */
+    protected $fetcher;
+
+    function __construct($fetcher, $proxy_url = null)
     {
         $this->fetcher = $fetcher;
         $this->proxy_url = $proxy_url;
@@ -22,9 +26,9 @@ class Auth_Yadis_ProxyResolver {
         // trim off the xri:// prefix
         $qxri = substr(Auth_Yadis_toURINormal($xri), 6);
         $hxri = $this->proxy_url . $qxri;
-        $args = array(
-                      '_xrd_r' => 'application/xrds+xml'
-                      );
+        $args = [
+            '_xrd_r' => 'application/xrds+xml',
+        ];
 
         if ($service_type) {
             $args['_xrd_t'] = $service_type;
@@ -37,9 +41,9 @@ class Auth_Yadis_ProxyResolver {
         return $query;
     }
 
-    function query($xri, $service_types, $filters = array())
+    function query($xri, $service_types, $filters = [])
     {
-        $services = array();
+        $services = [];
         $canonicalID = null;
         foreach ($service_types as $service_type) {
             $url = $this->queryURL($xri, $service_type);
@@ -65,7 +69,7 @@ class Auth_Yadis_ProxyResolver {
             //    almost certainly going to have duplicated service
             //    entries and broken priority ordering.
         }
-        return array($canonicalID, $services);
+        return [$canonicalID, $services];
     }
 }
 

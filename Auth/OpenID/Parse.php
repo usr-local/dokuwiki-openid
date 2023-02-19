@@ -89,36 +89,36 @@ class Auth_OpenID_Parse {
     /**
      * Specify some flags for use with regex matching.
      */
-    var $_re_flags = "si";
+    public $_re_flags = "si";
 
     /**
      * Stuff to remove before we start looking for tags
      */
-    var $_removed_re =
+    public $_removed_re =
            "<!--.*?-->|<!\[CDATA\[.*?\]\]>|<script\b(?!:)[^>]*>.*?<\/script>";
 
     /**
      * Starts with the tag name at a word boundary, where the tag name
      * is not a namespace
      */
-    var $_tag_expr = "<%s\b(?!:)([^>]*?)(?:\/>|>(.*)(?:<\/?%s\s*>|\Z))";
+    public $_tag_expr = "<%s\b(?!:)([^>]*?)(?:\/>|>(.*)(?:<\/?%s\s*>|\Z))";
 
-    var $_attr_find = '\b(\w+)=("[^"]*"|\'[^\']*\'|[^\'"\s\/<>]+)';
+    public $_attr_find = '\b(\w+)=("[^"]*"|\'[^\']*\'|[^\'"\s\/<>]+)';
 
-    var $_open_tag_expr = "<%s\b";
-    var $_close_tag_expr = "<((\/%s\b)|(%s[^>\/]*\/))>";
+    public $_open_tag_expr = "<%s\b";
+    public $_close_tag_expr = "<((\/%s\b)|(%s[^>\/]*\/))>";
 
-    function Auth_OpenID_Parse()
+    function __construct()
     {
         $this->_link_find = sprintf("/<link\b(?!:)([^>]*)(?!<)>/%s",
                                     $this->_re_flags);
 
-        $this->_entity_replacements = array(
-                                            'amp' => '&',
-                                            'lt' => '<',
-                                            'gt' => '>',
-                                            'quot' => '"'
-                                            );
+        $this->_entity_replacements = [
+            'amp' => '&',
+            'lt' => '<',
+            'gt' => '>',
+            'quot' => '"',
+        ];
 
         $this->_attr_find = sprintf("/%s/%s",
                                     $this->_attr_find,
@@ -136,13 +136,17 @@ class Auth_OpenID_Parse {
     /**
      * Returns a regular expression that will match a given tag in an
      * SGML string.
+     *
+     * @param string $tag_name
+     * @param array $close_tags
+     * @return string
      */
     function tagMatcher($tag_name, $close_tags = null)
     {
         $expr = $this->_tag_expr;
 
         if ($close_tags) {
-            $options = implode("|", array_merge(array($tag_name), $close_tags));
+            $options = implode("|", array_merge([$tag_name], $close_tags));
             $closer = sprintf("(?:%s)", $options);
         } else {
             $closer = $tag_name;
@@ -166,7 +170,7 @@ class Auth_OpenID_Parse {
 
     function htmlBegin($s)
     {
-        $matches = array();
+        $matches = [];
         $result = preg_match($this->openTag('html'), $s,
                              $matches, PREG_OFFSET_CAPTURE);
         if ($result === false || !$matches) {
@@ -178,7 +182,7 @@ class Auth_OpenID_Parse {
 
     function htmlEnd($s)
     {
-        $matches = array();
+        $matches = [];
         $result = preg_match($this->closeTag('html'), $s,
                              $matches, PREG_OFFSET_CAPTURE);
         if ($result === false || !$matches) {
@@ -190,7 +194,7 @@ class Auth_OpenID_Parse {
 
     function headFind()
     {
-        return $this->tagMatcher('head', array('body', 'html'));
+        return $this->tagMatcher('head', ['body', 'html']);
     }
 
     function replaceEntities($str)
@@ -203,7 +207,7 @@ class Auth_OpenID_Parse {
 
     function removeQuotes($str)
     {
-        $matches = array();
+        $matches = [];
         $double = '/^"(.*)"$/';
         $single = "/^\'(.*)\'$/";
 
@@ -215,20 +219,13 @@ class Auth_OpenID_Parse {
             return $str;
         }
     }
-    
+
     function match($regexp, $text, &$match)
     {
-        if (!is_callable('mb_ereg_search_init')) {
-            return preg_match($regexp, $text, $match);
+        if (preg_match($regexp, $text, $match)) {
+           return true;
         }
-
-        $regexp = substr($regexp, 1, strlen($regexp) - 2 - strlen($this->_re_flags));
-        mb_ereg_search_init($text);
-        if (!mb_ereg_search($regexp)) {
-            return false;
-        }
-        $match = mb_ereg_search_getregs();
-        return true;
+        return false;
     }
 
     /**
@@ -254,7 +251,7 @@ class Auth_OpenID_Parse {
         $html_end = $this->htmlEnd($stripped);
 
         if ($html_begin === false) {
-            return array();
+            return [];
         }
 
         if ($html_end === false) {
@@ -269,25 +266,25 @@ class Auth_OpenID_Parse {
 
         // Try to find the <HEAD> tag.
         $head_re = $this->headFind();
-        $head_match = array();
+        $head_match = [];
         if (!$this->match($head_re, $stripped, $head_match)) {
                      ini_set( 'pcre.backtrack_limit', $old_btlimit );
-                     return array();
+                     return [];
         }
 
-        $link_data = array();
-        $link_matches = array();
+        $link_data = [];
+        $link_matches = [];
 
         if (!preg_match_all($this->_link_find, $head_match[0],
                             $link_matches)) {
             ini_set( 'pcre.backtrack_limit', $old_btlimit );
-            return array();
+            return [];
         }
 
         foreach ($link_matches[0] as $link) {
-            $attr_matches = array();
+            $attr_matches = [];
             preg_match_all($this->_attr_find, $link, $attr_matches);
-            $link_attrs = array();
+            $link_attrs = [];
             foreach ($attr_matches[0] as $index => $full_match) {
                 $name = $attr_matches[1][$index];
                 $value = $this->replaceEntities(
@@ -331,7 +328,7 @@ class Auth_OpenID_Parse {
         // Filter the list of link attributes on whether it has
         // target_rel as a relationship.
         // XXX: TESTME
-        $result = array();
+        $result = [];
         foreach ($link_attrs_list as $attr) {
             if ($this->linkHasRel($attr, $target_rel)) {
                 $result[] = $attr;
@@ -371,7 +368,7 @@ function Auth_OpenID_legacy_discover($html_text, $server_rel,
     } else {
         $delegate_url = $p->findFirstHref($link_attrs,
                                           $delegate_rel);
-        return array($delegate_url, $server_url);
+        return [$delegate_url, $server_url];
     }
 }
 

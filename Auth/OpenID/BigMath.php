@@ -30,7 +30,7 @@ require_once 'Auth/OpenID.php';
  * @access private
  * @package OpenID
  */
-class Auth_OpenID_MathLibrary {
+abstract class Auth_OpenID_MathLibrary {
     /**
      * Given a long integer, returns the number converted to a binary
      * string.  This function accepts long integer values of arbitrary
@@ -55,7 +55,7 @@ class Auth_OpenID_MathLibrary {
             return "\x00";
         }
 
-        $bytes = array();
+        $bytes = [];
 
         while ($this->cmp($long, 0) > 0) {
             array_unshift($bytes, $this->mod($long, 256));
@@ -78,7 +78,7 @@ class Auth_OpenID_MathLibrary {
      * Given a binary string, returns the binary string converted to a
      * long number.
      *
-     * @param string $binary The binary version of a long number,
+     * @param string $str The binary version of a long number,
      * probably as a result of calling longToBinary
      * @return integer $long The long number equivalent of the binary
      * string $str
@@ -131,17 +131,13 @@ class Auth_OpenID_MathLibrary {
      * and will utilize the local large-number math library when
      * available.
      *
-     * @param integer $start The start of the range, or the minimum
-     * random number to return
      * @param integer $stop The end of the range, or the maximum
      * random number to return
-     * @param integer $step The step size, such that $result - ($step
-     * * N) = $start for some N
      * @return integer $result The resulting randomly-generated number
      */
     function rand($stop)
     {
-        static $duplicate_cache = array();
+        static $duplicate_cache = [];
 
         // Used as the key for the duplicate cache
         $rbytes = $this->longToBinary($stop);
@@ -162,10 +158,10 @@ class Auth_OpenID_MathLibrary {
             $duplicate = $this->mod($mxrand, $stop);
 
             if (count($duplicate_cache) > 10) {
-                $duplicate_cache = array();
+                $duplicate_cache = [];
             }
 
-            $duplicate_cache[$rbytes] = array($duplicate, $nbytes);
+            $duplicate_cache[$rbytes] = [$duplicate, $nbytes];
         }
 
         do {
@@ -176,6 +172,55 @@ class Auth_OpenID_MathLibrary {
 
         return $this->mod($n, $stop);
     }
+
+    /**
+     * @param int $number
+     * @param int $base
+     * @return int
+     */
+    abstract protected function init($number, $base = 10);
+
+    /**
+     * @param int $x
+     * @param int $y
+     * @return int
+     */
+    abstract public function cmp($x, $y);
+
+    /**
+     * @param int $x
+     * @param int $y
+     * @return int
+     */
+    abstract protected function add($x, $y);
+
+    /**
+     * @param int $x
+     * @param int $y
+     * @return int
+     */
+    abstract protected function mul($x, $y);
+
+    /**
+     * @param int $x
+     * @param int $y
+     * @return int
+     */
+    abstract protected function div($x, $y);
+
+    /**
+     * @param int $base
+     * @param int $modulus
+     * @return int
+     */
+    abstract protected function mod($base, $modulus);
+
+    /**
+     * @param int $base
+     * @param int $exponent
+     * @return int
+     */
+    abstract protected function pow($base, $exponent);
 }
 
 /**
@@ -188,7 +233,7 @@ class Auth_OpenID_MathLibrary {
  * @package OpenID
  */
 class Auth_OpenID_BcMathWrapper extends Auth_OpenID_MathLibrary{
-    var $type = 'bcmath';
+    public $type = 'bcmath';
 
     function add($x, $y)
     {
@@ -234,6 +279,10 @@ class Auth_OpenID_BcMathWrapper extends Auth_OpenID_MathLibrary{
      * Same as bcpowmod when bcpowmod is missing
      *
      * @access private
+     * @param int $base
+     * @param int $exponent
+     * @param int $modulus
+     * @return int
      */
     function _powmod($base, $exponent, $modulus)
     {
@@ -274,7 +323,7 @@ class Auth_OpenID_BcMathWrapper extends Auth_OpenID_MathLibrary{
  * @package OpenID
  */
 class Auth_OpenID_GmpMathWrapper extends Auth_OpenID_MathLibrary{
-    var $type = 'gmp';
+    public $type = 'gmp';
 
     function add($x, $y)
     {
@@ -342,29 +391,33 @@ class Auth_OpenID_GmpMathWrapper extends Auth_OpenID_MathLibrary{
  */
 function Auth_OpenID_math_extensions()
 {
-    $result = array();
+    $result = [];
 
     if (!defined('Auth_OpenID_BUGGY_GMP')) {
-        $result[] =
-            array('modules' => array('gmp', 'php_gmp'),
-                  'extension' => 'gmp',
-                  'class' => 'Auth_OpenID_GmpMathWrapper');
+        $result[] = [
+            'modules' => ['gmp', 'php_gmp'],
+            'extension' => 'gmp',
+            'class' => 'Auth_OpenID_GmpMathWrapper',
+        ];
     }
 
-    $result[] = array('modules' => array('bcmath', 'php_bcmath'),
-                      'extension' => 'bcmath',
-                      'class' => 'Auth_OpenID_BcMathWrapper');
+    $result[] = [
+        'modules' => ['bcmath', 'php_bcmath'],
+        'extension' => 'bcmath',
+        'class' => 'Auth_OpenID_BcMathWrapper',
+    ];
 
     return $result;
 }
 
 /**
  * Detect which (if any) math library is available
+ *
+ * @param array $exts
+ * @return bool
  */
 function Auth_OpenID_detectMathLibrary($exts)
 {
-    $loaded = false;
-
     foreach ($exts as $extension) {
         if (extension_loaded($extension['extension'])) {
             return $extension;
@@ -391,8 +444,7 @@ function Auth_OpenID_detectMathLibrary($exts)
  * This function checks for the existence of specific long number
  * implementations in the following order: GMP followed by BCmath.
  *
- * @return Auth_OpenID_MathWrapper $instance An instance of
- * {@link Auth_OpenID_MathWrapper} or one of its subclasses
+ * @return Auth_OpenID_MathLibrary|null
  *
  * @package OpenID
  */
@@ -417,16 +469,14 @@ function Auth_OpenID_getMathLib()
     // works.
     $ext = Auth_OpenID_detectMathLibrary(Auth_OpenID_math_extensions());
     if ($ext === false) {
-        $tried = array();
+        $tried = [];
         foreach (Auth_OpenID_math_extensions() as $extinfo) {
             $tried[] = $extinfo['extension'];
         }
-        $triedstr = implode(", ", $tried);
 
         Auth_OpenID_setNoMathSupport();
 
-        $result = null;
-        return $result;
+        return null;
     }
 
     // Instantiate a new wrapper
