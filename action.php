@@ -6,7 +6,7 @@
  * @license    GPL 2 (http://www.gnu.org/licenses/gpl.html)
  * @author     This version by François Hodierne (http://h6e.net/)
  * @author     Original by Andreas Gohr <andi@splitbrain.org>
- * @version    2.2.0-ul-1
+ * @version    2.2.0-ul-2
  */
 
 /**
@@ -45,10 +45,10 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	{
 		return array(
 			'author' => 'h6e.net / 7usr7local / tzzee',
-			'email'  => 'contact@h6e.net',
-			'date'   => '2011-02-15 / 2018-06-12 / 2019-02-27',
+			'email'  => 'pjw-git-2018@usr-local.org',
+			'date'   => '2023-02-18',
 			'name'   => 'OpenID plugin',
-			'desc'   => 'Authenticate on a DokuWiki with OpenID (Vers. 2.2.0-ul-1)',
+			'desc'   => 'Authenticate on a DokuWiki with OpenID (Vers. 2.2.0-ul-2)',
 			'url'    => 'https://github.com/usr-local/dokuwiki-openid',
 		);
 	}
@@ -58,12 +58,12 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	 */
 	function register(Doku_Event_Handler $controller)
 	{
-		$controller->register_hook('HTML_LOGINFORM_OUTPUT',
+		$controller->register_hook('FORM_LOGIN_OUTPUT',
 			'BEFORE',
 			$this,
 			'handle_login_form',
 			array());
-		$controller->register_hook('HTML_UPDATEPROFILEFORM_OUTPUT',
+		$controller->register_hook('FORM_UPDATEPROFILE_OUTPUT',
 			'AFTER',
 			$this,
 			'handle_profile_form',
@@ -376,8 +376,8 @@ class action_plugin_openid extends DokuWiki_Action_Plugin {
 	{
 		$msg = $this->getLang('login_link');
 		$msg = sprintf("<p>$msg</p>", $this->_self('openid'));
-		$pos = $event->data->findElementByAttribute('type', 'submit');
-		$event->data->insertElement($pos+2, $msg);
+		$pos = $event->data->findPositionByAttribute('type', 'submit');
+		$event->data->addHTML($msg, $pos+2);
 	}
 
 	function handle_profile_form(&$event, $param)
